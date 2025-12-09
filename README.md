@@ -1,6 +1,6 @@
 # Java 8 JRE Download Data
 
-[![Update Java 8 Data](https://github.com/AU-Mark/Java8-Download-Data/actions/workflows/update-java-data.yml/badge.svg)](https://github.com/AU-Mark/Java8-Download-Data/actions/workflows/update-java-data.yml)
+[![Update Java 8 Data](https://github.com/AU-Mark/Java-8-URL-BundleID-Archiver/actions/workflows/update-java-data.yml/badge.svg)](https://github.com/AU-Mark/Java-8-URL-BundleID-Archiver/actions/workflows/update-java-data.yml)
 
 Automated daily scraper for Oracle Java 8 JRE download links from [java.com](https://www.java.com/en/download/manual.jsp).
 
@@ -52,14 +52,14 @@ Automated daily scraper for Oracle Java 8 JRE download links from [java.com](htt
 ### Raw JSON URL
 
 ```
-https://raw.githubusercontent.com/AU-Mark/Java8-Download-Data/main/data/Java.json
+https://raw.githubusercontent.com/AU-Mark/Java-8-URL-BundleID-Archiver/main/data/Java.json
 ```
 
 ### PowerShell Example
 
 ```powershell
 # Get the latest Windows x64 download URL
-$javaData = Invoke-RestMethod -Uri "https://raw.githubusercontent.com/AU-Mark/Java8-Download-Data/main/data/Java.json"
+$javaData = Invoke-RestMethod -Uri "https://raw.githubusercontent.com/AU-Mark/Java-8-URL-BundleID-Archiver/main/data/Java.json"
 $downloadUrl = $javaData.Latest.Downloads.Windows_x64.Url
 Write-Host "Java $($javaData.Latest.Version) - $downloadUrl"
 
