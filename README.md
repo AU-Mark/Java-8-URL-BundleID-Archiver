@@ -1,4 +1,4 @@
-# Java 8 JRE Download Data
+# Java 8 JRE Download URLs
 
 [![Update Java 8 Data](https://github.com/AU-Mark/Java-8-URL-BundleID-Archiver/actions/workflows/update-java-data.yml/badge.svg)](https://github.com/AU-Mark/Java-8-URL-BundleID-Archiver/actions/workflows/update-java-data.yml)
 
