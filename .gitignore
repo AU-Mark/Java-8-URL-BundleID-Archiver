@@ -1,0 +1,15 @@
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# Debug output
+java_page.html
+
+# OS files
+.DS_Store
+Thumbs.db

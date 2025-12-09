@@ -1,0 +1,165 @@
+name: Update Java 8 Download Data
+
+on:
+  schedule:
+    # Run daily at 7:00 AM UTC (different from Secure Boot at 6 AM to avoid conflicts)
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+    # Allow manual trigger
+
+permissions:
+  contents: write
+
+jobs:
+  update-data:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Chrome
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+
+      - name: Get Chrome version
+        id: chrome-version
+        shell: pwsh
+        run: |
+          $chromePath = "C:\Program Files\Google\Chrome\Application\chrome.exe"
+          if (Test-Path $chromePath) {
+            $version = (Get-Item $chromePath).VersionInfo.FileVersion
+            Write-Host "Chrome version: $version"
+            "version=$version" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Error "Chrome not found"
+            exit 1
+          }
+
+      - name: Install Selenium PowerShell Module
+        shell: pwsh
+        run: |
+          Install-Module -Name Selenium -Scope CurrentUser -Force -AllowClobber
+          $seleniumPath = (Get-Module -ListAvailable Selenium).ModuleBase
+          Write-Host "Selenium installed at: $seleniumPath"
+
+      - name: Download ChromeDriver
+        shell: pwsh
+        run: |
+          $chromeVersion = "${{ steps.chrome-version.outputs.version }}"
+          $majorVersion = $chromeVersion.Split('.')[0]
+          Write-Host "Chrome major version: $majorVersion"
+
+          # Get ChromeDriver URL from Chrome for Testing
+          $jsonUrl = "https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json"
+          $versions = (Invoke-RestMethod -Uri $jsonUrl).versions
+
+          # Find matching ChromeDriver
+          $matchingVersion = $versions | Where-Object { $_.version -like "$majorVersion.*" } | Select-Object -Last 1
+
+          if ($matchingVersion) {
+            $driverUrl = ($matchingVersion.downloads.chromedriver | Where-Object { $_.platform -eq 'win64' }).url
+            Write-Host "Downloading ChromeDriver from: $driverUrl"
+
+            $downloadPath = "$env:TEMP\chromedriver.zip"
+            Invoke-WebRequest -Uri $driverUrl -OutFile $downloadPath
+
+            # Extract to Selenium assemblies folder
+            $seleniumPath = (Get-Module -ListAvailable Selenium).ModuleBase
+            $assembliesPath = Join-Path $seleniumPath "assemblies"
+
+            Expand-Archive -Path $downloadPath -DestinationPath "$env:TEMP\chromedriver" -Force
+            Copy-Item "$env:TEMP\chromedriver\chromedriver-win64\chromedriver.exe" -Destination $assembliesPath -Force
+
+            Write-Host "ChromeDriver installed to: $assembliesPath"
+            & (Join-Path $assembliesPath "chromedriver.exe") --version
+          } else {
+            Write-Error "Could not find matching ChromeDriver"
+            exit 1
+          }
+
+      - name: Run Update Script
+        shell: pwsh
+        run: |
+          Set-Location $env:GITHUB_WORKSPACE
+          & ".\scripts\Update-JavaData.ps1" -Verbose
+        continue-on-error: true
+
+      - name: Validate Data File
+        id: validate
+        shell: pwsh
+        run: |
+          $valid = $true
+          $changes = $false
+
+          # Check Java.json
+          $javaPath = "data/Java.json"
+          if (Test-Path $javaPath) {
+            $java = Get-Content $javaPath | ConvertFrom-Json
+            if ($java.Latest -and $java.Latest.Version) {
+              $downloadCount = ($java.Latest.Downloads | Get-Member -MemberType NoteProperty).Count
+              Write-Host "Java.json valid: Version $($java.Latest.Version), $downloadCount platforms"
+              if ($downloadCount -lt 5) {
+                Write-Warning "Java.json has too few platforms: $downloadCount"
+                $valid = $false
+              }
+            } else {
+              Write-Warning "Java.json missing Latest or Version"
+              $valid = $false
+            }
+          } else {
+            Write-Warning "Java.json not found"
+            $valid = $false
+          }
+
+          # Check for changes
+          $gitStatus = git status --porcelain
+          if ($gitStatus) {
+            $changes = $true
+            Write-Host "Changes detected"
+          } else {
+            Write-Host "No changes detected"
+          }
+
+          "valid=$valid" >> $env:GITHUB_OUTPUT
+          "changes=$changes" >> $env:GITHUB_OUTPUT
+
+      - name: Commit and Push Changes
+        if: steps.validate.outputs.valid == 'True' && steps.validate.outputs.changes == 'True'
+        shell: pwsh
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+          git add data/
+
+          $date = Get-Date -Format "yyyy-MM-dd"
+
+          # Get version from JSON for commit message
+          $javaPath = "data/Java.json"
+          $version = "unknown"
+          if (Test-Path $javaPath) {
+            $java = Get-Content $javaPath | ConvertFrom-Json
+            if ($java.Latest.Version) {
+              $version = $java.Latest.Version
+            }
+          }
+
+          git commit -m "Update Java 8 data ($version) - $date"
+
+          git push
+
+      - name: Report Status
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "========================================="
+          Write-Host "Workflow Summary"
+          Write-Host "========================================="
+          Write-Host "Validation: ${{ steps.validate.outputs.valid }}"
+          Write-Host "Changes: ${{ steps.validate.outputs.changes }}"
+
+          if ("${{ steps.validate.outputs.valid }}" -eq "False") {
+            Write-Host "WARNING: Data validation failed. Check logs."
+          }
